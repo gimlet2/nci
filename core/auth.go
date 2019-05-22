@@ -2,12 +2,12 @@ package core
 
 import (
 	"errors"
+	"log"
+	"net/http"
+
 	uuid "github.com/nu7hatch/gouuid"
 	"golang.org/x/oauth2"
 	githuboauth "golang.org/x/oauth2/github"
-	"log"
-	"net/http"
-	"os"
 )
 
 type Auth interface {
@@ -51,12 +51,12 @@ func (a *authImpl) Client(token *oauth2.Token) *http.Client {
 	return a.oauthConf.Client(oauth2.NoContext, token)
 }
 
-func AuthSetup() Auth {
+func AuthSetup(config *Config) Auth {
 	var auth Auth
 	auth = &authImpl{
 		oauthConf: &oauth2.Config{
-			ClientID:     os.Getenv("CLIENT_ID"),
-			ClientSecret: os.Getenv("CLIENT_SECRET"),
+			ClientID:     config.ClientId,
+			ClientSecret: config.ClientSecret,
 			// select level of access you want https://developer.github.com/v3/oauth/#scopes
 			Scopes:   []string{"user:email", "repo"}, // more scopes to ad
 			Endpoint: githuboauth.Endpoint,

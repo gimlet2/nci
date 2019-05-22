@@ -7,5 +7,5 @@ import (
 
 func main() {
 	log.Println("Application started")
-	core.SetupRouting()
+	core.SetupRouting(core.GetConfig())
 }

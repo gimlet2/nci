@@ -72,7 +72,7 @@ func (s *serverImpl) ReadJson(r *http.Request) interface{} {
 	return body
 }
 
-func ServerSetup(init func(s Server)) {
+func ServerSetup(config *Config, init func(s Server)) {
 	// autocert.Manager{
 	// 	Prompt:     autocert.AcceptTOS,
 	// 	HostPolicy: autocert.HostWhitelist(os.Getenv("hostname")),
@@ -82,7 +82,7 @@ func ServerSetup(init func(s Server)) {
 	var server Server
 	server = &serverImpl{r}
 	init(server)
-	l := autocert.NewListener(os.Getenv("HOSTNAME"))
+	l := autocert.NewListener(config.Hostname)
 	srv := &http.Server{
 		// Addr: "0.0.0.0:" + getPort(),
 		Addr: ":https",

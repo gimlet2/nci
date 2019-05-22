@@ -1,6 +1,5 @@
 package core
 
-
 import (
 	"fmt"
 	"net/http"
@@ -17,17 +16,18 @@ Hello ${userName}
 </body></html>
 `
 
-func SetupRouting() {
+func SetupRouting(config *Config) {
 
-	auth := AuthSetup()
+	auth := AuthSetup(config)
 	var github GitHub
-	ServerSetup(func(s Server) {
+	ServerSetup(config, func(s Server) {
 		s.Get("/", func(w http.ResponseWriter, r *http.Request) {
 			s.Html(w, htmlIndex)
 		})
 		s.Get("/main", func(w http.ResponseWriter, r *http.Request) {
 			if github == nil {
-
+				http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+				return
 			}
 			s.Html(w, strings.ReplaceAll(htmlMain, "${userName}", *github.CurrentUser().Login))
 		})
