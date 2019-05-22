@@ -4,41 +4,96 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"time"
 	"os"
+	"time"
 
 	"github.com/gorilla/mux"
+	"golang.org/x/crypto/acme/autocert"
 )
 
-func Json(w http.ResponseWriter, v interface{}) {
+type Server interface {
+	Get(pattern string, handler func(w http.ResponseWriter, r *http.Request))
+
+	Post(pattern string, handler func(w http.ResponseWriter, r *http.Request))
+
+	Json(w http.ResponseWriter, v interface{})
+
+	Html(w http.ResponseWriter, v string)
+
+	ReadJson(r *http.Request) interface{}
+
+	Text(w http.ResponseWriter, v string)
+
+	Error(w http.ResponseWriter, e error)
+}
+
+type serverImpl struct {
+	r *mux.Router
+}
+
+func (s *serverImpl) Get(pattern string, handler func(w http.ResponseWriter, r *http.Request)) {
+	get(s.r, pattern, handler)
+}
+
+func (s *serverImpl) Post(pattern string, handler func(w http.ResponseWriter, r *http.Request)) {
+	post(s.r, pattern, handler)
+}
+
+func (s *serverImpl) Json(w http.ResponseWriter, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	j, _ := json.Marshal(v)
 	w.Write(j)
 }
 
-func Text(w http.ResponseWriter, v []byte) {
+func (s *serverImpl) Text(w http.ResponseWriter, v string) {
 	w.Header().Set("Content-Type", "text")
-	w.Write(v)
+	w.Write([]byte(v))
 }
 
-func Error(w http.ResponseWriter, e error) {
+func (s *serverImpl) Html(w http.ResponseWriter, v string) {
+	w.Header().Set("Content-Type", "text/html")
+	w.Write([]byte(v))
+}
+
+func (s *serverImpl) Error(w http.ResponseWriter, e error) {
 	log.Printf("Failed to get resourse %v", e)
 	w.WriteHeader(500)
 	w.Write([]byte("Error"))
 }
 
-func Server(init func(r *mux.Router)) {
+func (s *serverImpl) ReadJson(r *http.Request) interface{} {
+	decoder := json.NewDecoder(r.Body)
+	var body interface{}
+	err := decoder.Decode(&body)
+	if err != nil {
+		log.Printf("Failed to parse json: %v", err)
+		return nil
+	}
+	return body
+}
+
+func ServerSetup(init func(s Server)) {
+	// autocert.Manager{
+	// 	Prompt:     autocert.AcceptTOS,
+	// 	HostPolicy: autocert.HostWhitelist(os.Getenv("hostname")),
+	// 	Cache:      autocert.DirCache(os.Getenv("cacheDir")),
+	// }
 	r := mux.NewRouter()
-	init(r)
+	var server Server
+	server = &serverImpl{r}
+	init(server)
+	l := autocert.NewListener(os.Getenv("HOSTNAME"))
 	srv := &http.Server{
-		Addr: "0.0.0.0:" + getPort(),
+		// Addr: "0.0.0.0:" + getPort(),
+		Addr: ":https",
 		// Good practice to set timeouts to avoid Slowloris attacks.
 		WriteTimeout: time.Second * 15,
 		ReadTimeout:  time.Second * 15,
 		IdleTimeout:  time.Second * 60,
 		Handler:      r, // Pass our instance of gorilla/mux in.
+
 	}
-	log.Fatal(srv.ListenAndServe())
+	log.Fatal(srv.Serve(l))
 
 }
 
@@ -50,11 +105,11 @@ func getPort() string {
 	return port
 }
 
-func Get(r *mux.Router, pattern string, handler func(w http.ResponseWriter, r *http.Request)) {
+func get(r *mux.Router, pattern string, handler func(w http.ResponseWriter, r *http.Request)) {
 	request(r, pattern, handler, "GET")
 }
 
-func Post(r *mux.Router, pattern string, handler func(w http.ResponseWriter, r *http.Request)) {
+func post(r *mux.Router, pattern string, handler func(w http.ResponseWriter, r *http.Request)) {
 	request(r, pattern, handler, "POST")
 }
 
