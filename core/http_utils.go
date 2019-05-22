@@ -73,19 +73,18 @@ func (s *serverImpl) ReadJson(r *http.Request) interface{} {
 }
 
 func ServerSetup(config *Config, init func(s Server)) {
-	// autocert.Manager{
-	// 	Prompt:     autocert.AcceptTOS,
-	// 	HostPolicy: autocert.HostWhitelist(os.Getenv("hostname")),
-	// 	Cache:      autocert.DirCache(os.Getenv("cacheDir")),
-	// }
 	r := mux.NewRouter()
 	var server Server
 	server = &serverImpl{r}
 	init(server)
-	l := autocert.NewListener(config.Hostname)
+	m := &autocert.Manager{
+		Cache:      autocert.DirCache(config.SSLCacheDir),
+		Prompt:     autocert.AcceptTOS,
+		HostPolicy: autocert.HostWhitelist(config.Hostname),
+	}
 	srv := &http.Server{
-		// Addr: "0.0.0.0:" + getPort(),
-		Addr: ":https",
+		Addr:      "0.0.0.0:" + getPort(),
+		TLSConfig: m.TLSConfig(),
 		// Good practice to set timeouts to avoid Slowloris attacks.
 		WriteTimeout: time.Second * 15,
 		ReadTimeout:  time.Second * 15,
@@ -93,7 +92,7 @@ func ServerSetup(config *Config, init func(s Server)) {
 		Handler:      r, // Pass our instance of gorilla/mux in.
 
 	}
-	log.Fatal(srv.Serve(l))
+	log.Fatal(srv.ListenAndServeTLS("", ""))
 
 }
 

@@ -26,7 +26,7 @@ func SetupRouting(config *Config) {
 		})
 		s.Get("/main", func(w http.ResponseWriter, r *http.Request) {
 			if github == nil {
-				http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+				goHome(w, r)
 				return
 			}
 			s.Html(w, strings.ReplaceAll(htmlMain, "${userName}", *github.CurrentUser().Login))
@@ -38,14 +38,14 @@ func SetupRouting(config *Config) {
 		s.Get("/github_oauth_cb", func(w http.ResponseWriter, r *http.Request) {
 			token, err := auth.ExchangeForToken(r.FormValue("state"), r.FormValue("code"))
 			if err != nil {
-				http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+				goHome(w, r)
 				return
 			}
 
 			github = GitHubSetup(auth.Client(token))
 			user := github.CurrentUser()
 			if user == nil {
-				http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+				goHome(w, r)
 				return
 			}
 			fmt.Printf("Logged in as GitHub user: %s\n", *user.Login)
@@ -55,4 +55,8 @@ func SetupRouting(config *Config) {
 			s.Json(w, s.ReadJson(r))
 		})
 	})
+}
+
+func goHome(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 }

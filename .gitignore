@@ -1,3 +1,4 @@
 env.sh
 nci
 .vscode/
+secret-dir/
