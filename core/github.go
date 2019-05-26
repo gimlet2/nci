@@ -1,24 +1,27 @@
 package core
 
 import (
-	"github.com/google/go-github/github"
-	// "golang.org/x/oauth2"
 	"context"
-
 	"log"
-	"net/http"
+
+	"github.com/google/go-github/github"
+	// "net/http"
 )
 
 type GitHub interface {
 	CurrentUser() *github.User
-	ListRepos() []*github.Repository
+	ListRepos(user string) []*github.Repository
+	SetupRepo(user string, repo string)
 }
 
 type githubImpl struct {
-	client *github.Client
+	client      *github.Client
+	accessToken string
+	config      *Config
 }
 
 func (g *githubImpl) CurrentUser() *github.User {
+
 	user, _, err := g.client.Users.Get(context.TODO(), "")
 	if err != nil {
 		log.Printf("client.Users.Get() faled: %v", err)
@@ -27,8 +30,8 @@ func (g *githubImpl) CurrentUser() *github.User {
 	return user
 }
 
-func (g *githubImpl) ListRepos() []*github.Repository {
-	repos, _, err := g.client.Repositories.ListAll(context.TODO(), nil)
+func (g *githubImpl) ListRepos(user string) []*github.Repository {
+	repos, _, err := g.client.Repositories.List(context.TODO(), user, nil)
 	if err != nil {
 		log.Printf("client.Repositories.ListAll() faled: %v", err)
 		return nil
@@ -36,10 +39,26 @@ func (g *githubImpl) ListRepos() []*github.Repository {
 	return repos
 }
 
-func GitHubSetup(client *http.Client) GitHub {
+func (g *githubImpl) SetupRepo(user string, repo string) {
+	var config map[string]interface{}
+	config["url"] = "https://" + g.config.Hostname + "/hook"
+	config["content_type"] = "json"
+	web := "web"
+	active := true
+	g.client.Repositories.CreateHook(context.TODO(), user, repo, &github.Hook{
+		Name:   &web,
+		Active: &active,
+		Events: []string{"push", "pull_request"},
+		Config: config,
+	})
+}
+
+func GitHubSetup(config *Config, client *GithubClient) GitHub {
 	var githubInstanse GitHub
 	githubInstanse = &githubImpl{
-		client: github.NewClient(client),
+		client:      github.NewClient(client.HttpClient),
+		accessToken: client.Token,
+		config:      config,
 	}
 	return githubInstanse
 }

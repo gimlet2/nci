@@ -12,11 +12,16 @@ import (
 	githuboauth "golang.org/x/oauth2/github"
 )
 
+type GithubClient struct {
+	HttpClient *http.Client
+	Token      string
+}
+
 type Auth interface {
 	GetAuthUrl() string
 	IsStateValid(state string) bool
 	ExchangeForToken(state string, code string) (*oauth2.Token, error)
-	Client(token *oauth2.Token) *http.Client
+	Client(token *oauth2.Token) *GithubClient
 	ReadToken(r *http.Request) *oauth2.Token
 	SaveToken(t *oauth2.Token, w http.ResponseWriter)
 }
@@ -51,8 +56,11 @@ func (a *authImpl) ExchangeForToken(state string, code string) (*oauth2.Token, e
 	return token, nil
 }
 
-func (a *authImpl) Client(token *oauth2.Token) *http.Client {
-	return a.oauthConf.Client(oauth2.NoContext, token)
+func (a *authImpl) Client(token *oauth2.Token) *GithubClient {
+	return &GithubClient{
+		HttpClient: a.oauthConf.Client(oauth2.NoContext, token),
+		Token:      token.AccessToken,
+	}
 }
 
 func (a *authImpl) ReadToken(r *http.Request) *oauth2.Token {

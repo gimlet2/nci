@@ -4,6 +4,8 @@ import (
 	"log"
 	"net/http"
 	"strings"
+
+	githubLib "github.com/google/go-github/github"
 )
 
 const htmlIndex = `<html><body>
@@ -14,6 +16,17 @@ Logged in with <a href="/login">GitHub</a>
 const htmlMain = `<html><body>
 Hello ${userName}
 </body></html>
+`
+
+const htmlReposList = `<html><body>
+<h1>Repos</h1>
+<ul>
+${repos}
+</ul>
+</body></html>
+`
+const htmlRepo = `
+<li>${name}</li>
 `
 
 func SetupRouting(config *Config) {
@@ -30,8 +43,27 @@ func SetupRouting(config *Config) {
 				goHome(w, r)
 				return
 			}
-			github := GitHubSetup(auth.Client(token))
+			github := GitHubSetup(config, auth.Client(token))
 			s.Html(w, strings.ReplaceAll(htmlMain, "${userName}", *github.CurrentUser().Login))
+		})
+		s.Get("/repos", func(w http.ResponseWriter, r *http.Request) {
+			token := auth.ReadToken(r)
+			if token == nil {
+				goHome(w, r)
+				return
+			}
+			github := GitHubSetup(config, auth.Client(token))
+			user := github.CurrentUser()
+			if user == nil {
+				goHome(w, r)
+				return
+			}
+			repos := github.ListRepos(*user.Login)
+			m := func(r *githubLib.Repository) string {
+				s := strings.ReplaceAll(htmlRepo, "${name}", *r.Name)
+				return s
+			}
+			s.Html(w, strings.ReplaceAll(htmlReposList, "${repos}", strings.Join(MapRepos(repos, m), "")))
 		})
 		s.Get("/login", func(w http.ResponseWriter, r *http.Request) {
 			url := auth.GetAuthUrl()
@@ -43,7 +75,7 @@ func SetupRouting(config *Config) {
 				goHome(w, r)
 				return
 			}
-			github := GitHubSetup(auth.Client(token))
+			github := GitHubSetup(config, auth.Client(token))
 			user := github.CurrentUser()
 			if user == nil {
 				goHome(w, r)
@@ -53,7 +85,7 @@ func SetupRouting(config *Config) {
 			auth.SaveToken(token, w)
 			http.Redirect(w, r, "/main", http.StatusTemporaryRedirect)
 		})
-		s.Post("/webhook", func(w http.ResponseWriter, r *http.Request) {
+		s.Post("/hook", func(w http.ResponseWriter, r *http.Request) {
 			s.Json(w, s.ReadJson(r))
 		})
 	})
@@ -61,4 +93,12 @@ func SetupRouting(config *Config) {
 
 func goHome(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+}
+
+func MapRepos(repos []*githubLib.Repository, m func(r *githubLib.Repository) string) []string {
+	var result []string
+	for _, r := range repos {
+		result = append(result, m(r))
+	}
+	return result
 }
