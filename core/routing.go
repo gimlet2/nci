@@ -1,7 +1,7 @@
 package core
 
 import (
-	"fmt"
+	"log"
 	"net/http"
 	"strings"
 )
@@ -19,16 +19,18 @@ Hello ${userName}
 func SetupRouting(config *Config) {
 
 	auth := AuthSetup(config)
-	var github GitHub
+	// var github GitHub
 	ServerSetup(config, func(s Server) {
 		s.Get("/", func(w http.ResponseWriter, r *http.Request) {
 			s.Html(w, htmlIndex)
 		})
 		s.Get("/main", func(w http.ResponseWriter, r *http.Request) {
-			if github == nil {
+			token := auth.ReadToken(r)
+			if token == nil {
 				goHome(w, r)
 				return
 			}
+			github := GitHubSetup(auth.Client(token))
 			s.Html(w, strings.ReplaceAll(htmlMain, "${userName}", *github.CurrentUser().Login))
 		})
 		s.Get("/login", func(w http.ResponseWriter, r *http.Request) {
@@ -41,14 +43,14 @@ func SetupRouting(config *Config) {
 				goHome(w, r)
 				return
 			}
-
-			github = GitHubSetup(auth.Client(token))
+			github := GitHubSetup(auth.Client(token))
 			user := github.CurrentUser()
 			if user == nil {
 				goHome(w, r)
 				return
 			}
-			fmt.Printf("Logged in as GitHub user: %s\n", *user.Login)
+			log.Printf("Logged in as GitHub user: %s\n", *user.Login)
+			auth.SaveToken(token, w)
 			http.Redirect(w, r, "/main", http.StatusTemporaryRedirect)
 		})
 		s.Post("/webhook", func(w http.ResponseWriter, r *http.Request) {

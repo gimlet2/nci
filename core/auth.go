@@ -1,6 +1,8 @@
 package core
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -15,6 +17,8 @@ type Auth interface {
 	IsStateValid(state string) bool
 	ExchangeForToken(state string, code string) (*oauth2.Token, error)
 	Client(token *oauth2.Token) *http.Client
+	ReadToken(r *http.Request) *oauth2.Token
+	SaveToken(t *oauth2.Token, w http.ResponseWriter)
 }
 
 type authImpl struct {
@@ -49,6 +53,38 @@ func (a *authImpl) ExchangeForToken(state string, code string) (*oauth2.Token, e
 
 func (a *authImpl) Client(token *oauth2.Token) *http.Client {
 	return a.oauthConf.Client(oauth2.NoContext, token)
+}
+
+func (a *authImpl) ReadToken(r *http.Request) *oauth2.Token {
+	cookie, err := r.Cookie("session_token")
+	if err != nil {
+		log.Printf("Faile to read session cookie: %v", err)
+		return nil
+	}
+	decodedCookie, err := base64.URLEncoding.WithPadding(base64.NoPadding).DecodeString(cookie.Value)
+	if err != nil {
+		log.Printf("Faile to read session cookie: %v", err)
+		return nil
+	}
+	var t oauth2.Token
+	err = json.Unmarshal(decodedCookie, &t)
+	if err != nil {
+		log.Printf("Faile to read session cookie: %v", err)
+		return nil
+	}
+	return &t
+}
+
+func (a *authImpl) SaveToken(token *oauth2.Token, w http.ResponseWriter) {
+	j, _ := json.Marshal(token)
+	cookieValue := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(j)
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_token",
+		Value:    cookieValue,
+		HttpOnly: true,
+		Secure:   true,
+		Expires:  token.Expiry,
+	})
 }
 
 func AuthSetup(config *Config) Auth {
