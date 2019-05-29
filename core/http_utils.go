@@ -25,6 +25,8 @@ type Server interface {
 	Text(w http.ResponseWriter, v string)
 
 	Error(w http.ResponseWriter, e error)
+
+	PathParam(r *http.Request, name string) string
 }
 
 type serverImpl struct {
@@ -70,6 +72,11 @@ func (s *serverImpl) ReadJson(r *http.Request) interface{} {
 		return nil
 	}
 	return body
+}
+
+func (s *serverImpl) PathParam(r *http.Request, name string) string {
+	vars := mux.Vars(r)
+	return vars[name]
 }
 
 func ServerSetup(config *Config, init func(s Server)) {

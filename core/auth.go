@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -17,13 +18,17 @@ type GithubClient struct {
 	Token      string
 }
 
+type Token struct {
+	Token *oauth2.Token
+}
+
 type Auth interface {
 	GetAuthUrl() string
 	IsStateValid(state string) bool
-	ExchangeForToken(state string, code string) (*oauth2.Token, error)
-	Client(token *oauth2.Token) *GithubClient
-	ReadToken(r *http.Request) *oauth2.Token
-	SaveToken(t *oauth2.Token, w http.ResponseWriter)
+	ExchangeForToken(state string, code string) (*Token, error)
+	Client(token *Token) *GithubClient
+	ReadToken(r *http.Request) (*Token, error)
+	SaveToken(t *Token, w http.ResponseWriter)
 }
 
 type authImpl struct {
@@ -43,55 +48,55 @@ func (a *authImpl) IsStateValid(state string) bool {
 	return true
 }
 
-func (a *authImpl) ExchangeForToken(state string, code string) (*oauth2.Token, error) {
+func (a *authImpl) ExchangeForToken(state string, code string) (*Token, error) {
 	if !a.IsStateValid(state) {
-		return nil, errors.New("Invalide state")
+		return nil, errors.New("invalid state")
 	}
 
-	token, err := a.oauthConf.Exchange(oauth2.NoContext, code)
+	token, err := a.oauthConf.Exchange(context.TODO(), code)
 	if err != nil {
 		log.Printf("Token exchane failed: %v", err)
-		return nil, errors.New("Token exchane failed")
+		return nil, errors.New("token exchange failed")
 	}
-	return token, nil
+	return &Token{token}, nil
 }
 
-func (a *authImpl) Client(token *oauth2.Token) *GithubClient {
+func (a *authImpl) Client(token *Token) *GithubClient {
 	return &GithubClient{
-		HttpClient: a.oauthConf.Client(oauth2.NoContext, token),
-		Token:      token.AccessToken,
+		HttpClient: a.oauthConf.Client(context.TODO(), token.Token),
+		Token:      token.Token.AccessToken,
 	}
 }
 
-func (a *authImpl) ReadToken(r *http.Request) *oauth2.Token {
+func (a *authImpl) ReadToken(r *http.Request) (*Token, error) {
 	cookie, err := r.Cookie("session_token")
 	if err != nil {
 		log.Printf("Faile to read session cookie: %v", err)
-		return nil
+		return nil, err
 	}
 	decodedCookie, err := base64.URLEncoding.WithPadding(base64.NoPadding).DecodeString(cookie.Value)
 	if err != nil {
 		log.Printf("Faile to read session cookie: %v", err)
-		return nil
+		return nil, err
 	}
 	var t oauth2.Token
 	err = json.Unmarshal(decodedCookie, &t)
 	if err != nil {
 		log.Printf("Faile to read session cookie: %v", err)
-		return nil
+		return nil, err
 	}
-	return &t
+	return &Token{&t}, nil
 }
 
-func (a *authImpl) SaveToken(token *oauth2.Token, w http.ResponseWriter) {
-	j, _ := json.Marshal(token)
+func (a *authImpl) SaveToken(token *Token, w http.ResponseWriter) {
+	j, _ := json.Marshal(token.Token)
 	cookieValue := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(j)
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session_token",
 		Value:    cookieValue,
 		HttpOnly: true,
 		Secure:   true,
-		Expires:  token.Expiry,
+		Expires:  token.Token.Expiry,
 	})
 }
 
