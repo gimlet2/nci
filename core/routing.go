@@ -105,8 +105,8 @@ func SetupRouting(config *Config) {
 				return
 			}
 			token, err := storage.Read(repoName)
-			GitHubSetup(config, auth.Client(token))
-
+			gitHub := GitHubSetup(config, auth.Client(token))
+			gitHub.FetchConfig("", repoName, "") // TODO
 			s.Json(w, hook)
 		})
 	})

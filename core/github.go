@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io/ioutil"
 	"log"
@@ -16,6 +17,7 @@ type GitHub interface {
 	CurrentUser() (string, error)
 	ListRepos(user string) []*github.Repository
 	SetupRepo(user string, repo string)
+	FetchConfig(user string, repoName string, refs string) (*Pipeline, error)
 }
 
 type githubImpl struct {
@@ -55,6 +57,29 @@ func (g *githubImpl) SetupRepo(user string, repo string) {
 		Events: []string{"push", "pull_request"},
 		Config: config,
 	})
+}
+
+func (g *githubImpl) FetchConfig(user string, repoName string, refs string) (*Pipeline, error) {
+	var opts *github.RepositoryContentGetOptions
+	if refs == "" {
+		opts = nil
+	} else {
+		opts = &github.RepositoryContentGetOptions{
+			Ref: refs,
+		}
+	}
+	fileContent, _, _, err := g.client.Repositories.GetContents(context.TODO(), user, repoName, ".nci.yaml", opts)
+	if err != nil {
+		log.Printf("Failed to read build file: %v", err)
+		return nil, err
+	}
+	var pipeline Pipeline
+	err = json.Unmarshal([]byte(*fileContent.Content), &pipeline)
+	if err != nil {
+		log.Printf("Failed to read build file: %v", err)
+		return nil, err
+	}
+	return &pipeline, nil
 }
 
 func Hook(r *http.Request) (string, interface{}, error) {

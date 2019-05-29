@@ -1,0 +1,10 @@
+kind: pipeline
+name: example
+steps:
+  - name: build
+    image: golang
+    when:
+      event:
+        - pull_request
+    commands:
+      - go build
